@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "buildx": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=es2020 --outfile=main.js --external:obsidian --external:electron --sourcemap",
-    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=es2020 --outdir=build --external:obsidian --external:electron --sourcemap=inline",
+    "build": "node scripts/build-and-deploy.js --dest \"C:/_/obsidian/obsidian/.obsidian/plugins/plugins-enabled-css\"",
+    "buildxx": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=es2020 --outdir=build --external:obsidian --external:electron --sourcemap=inline",
     "deploy": "node scripts/bump-and-copy.js --dest \"C:/_/obsidian/obsidian/.obsidian/plugins/plugins-enabled-css\" --main build/main.js --sync-pkg",
     "build_": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=es2020 --outdir=build --external:obsidian --external:electron --sourcemap=inline",
     "buildz": "tsc -p tsconfig.json",
