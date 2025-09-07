@@ -19,7 +19,7 @@ export default class PluginsEnabledCss extends Plugin {
     private _pidByNameCache?: Map<string, string | null>;
 
     async onload(): Promise<void> {
-		console.log("[Plugins Enabled CSS] loading..." + new Date().toISOString());
+		console.log("[Plugins Enabled CSS] loading...-" + new Date().toISOString());
         this.addCommand({
             id: "plugins-enabled-css-run",
             name: "Update classes & wikilink data-text",
