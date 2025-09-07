@@ -1,7 +1,7 @@
 {
 	"compilerOptions": {
 		"target": "ES2020",
-        "module": "CommonJS",
+		"module": "ESNext", // esbuild will bundle to CJS
 		"lib": [
 			"ES2020",
 			"DOM"
@@ -12,10 +12,12 @@
 			"obsidian",
 			"node"
 		],
-		"noEmit": true,
-		"ignoreDeprecations": "6.0"
+		"noEmit": true, // tsc = type check only
+		"skipLibCheck": true,
+		"isolatedModules": true
 	},
 	"include": [
-		"src/**/*.ts"
+		"src/**/*.ts",
+		"main.ts"
 	]
 }

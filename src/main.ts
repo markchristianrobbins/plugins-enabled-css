@@ -1,9 +1,11 @@
-import { App, Notice, Plugin, PluginManifest } from "obsidian";
+// v0.0.14 - plugins-enabled-css/src/main.ts - Mark Christian Robbins - MIT License
+
+import { Notice, Plugin, PluginManifest } from "obsidian";
 
 /**
  * Obsidian plugin that injects dynamic CSS classes and styles to visually indicate
  * the enabled or disabled state of community plugins, and enhances internal plugin links
- * in both reading and editing views.
+ * in both reading and editing views. ok
  */
 export default class PluginsEnabledCss extends Plugin {
     private readonly STYLE_ID = "plugins-enabled-css-style";
@@ -17,6 +19,7 @@ export default class PluginsEnabledCss extends Plugin {
     private _pidByNameCache?: Map<string, string | null>;
 
     async onload(): Promise<void> {
+		console.log("[Plugins Enabled CSS] loading...eeee" + new Date().toISOString());
         this.addCommand({
             id: "plugins-enabled-css-run",
             name: "Update classes & wikilink data-text",
@@ -52,8 +55,8 @@ export default class PluginsEnabledCss extends Plugin {
     /** Reads .obsidian/community-plugins.json and returns enabled IDs. */
     private async _readEnabledCommunityPlugins(): Promise<Set<string>> {
         try {
-            const adapter: App["vault"]["adapter"] | undefined = this.app?.vault?.adapter;
-            if (!adapter?.stat || !("read" in adapter) || typeof (adapter as any).read !== "function") return new Set();
+            const adapter = this.app?.vault?.adapter as import("obsidian").FileSystemAdapter | undefined;
+            if (!adapter?.stat || !("read" in adapter) || typeof adapter.read !== "function") return new Set();
 
             const rel = ".obsidian/community-plugins.json";
             const stat = await adapter.stat(rel);
@@ -61,15 +64,21 @@ export default class PluginsEnabledCss extends Plugin {
 
             // mtime-based cache
             this._cpCache = this._cpCache || { mtime: 0, ids: new Set<string>() };
-            const mtime = (stat as any).mtime || (stat as any)?.modified || 0;
+            const mtime = (stat as { mtime?: number; modified?: number }).mtime || (stat as { modified?: number }).modified || 0;
             if (mtime && mtime === this._cpCache.mtime) return this._cpCache.ids;
 
-            const raw: string = await (adapter as any).read(rel);
+            const raw: string = await adapter.read(rel);
             let list: string[] = [];
             try {
                 const parsed = JSON.parse((raw ?? "[]").trim());
                 if (Array.isArray(parsed)) list = parsed as string[];
-                else if (parsed && Array.isArray((parsed as any).plugins)) list = (parsed as any).plugins as string[];
+                else if (
+                    parsed &&
+                    typeof parsed === "object" &&
+                    Array.isArray((parsed as { plugins?: unknown }).plugins)
+                ) {
+                    list = (parsed as { plugins: unknown[] }).plugins as string[];
+                }
             } catch (e) {
                 console.warn("[PEC] Failed to parse community-plugins.json:", e);
                 return new Set();
@@ -95,8 +104,9 @@ export default class PluginsEnabledCss extends Plugin {
 
     /** Build (and cache) Maps keyed by id and normalized name. */
     private _getManifests(force?: boolean): ManifestsCache {
-        const pm = this.app?.plugins;
-        const src: Record<string, PluginManifest> = (pm?.manifests as any) || {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pm = (this.app as any).plugins;
+        const src: Record<string, PluginManifest> = (pm?.manifests as Record<string, PluginManifest>) || {};
 
         // normalization for names
         const norm = (s: string): string =>
@@ -135,8 +145,9 @@ export default class PluginsEnabledCss extends Plugin {
     /** Resolve a plugin id from a (possibly "-plugin" suffixed) display name. */
     private _getPidFromName(rawName: string, opts: { strict?: boolean } = {}): string | null {
         const { strict = false } = opts;
-        const pm = this.app?.plugins;
-        const manifests: Record<string, PluginManifest> = (pm?.manifests as any) || {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pm = (this.app as any).plugins;
+        const manifests: Record<string, PluginManifest> = (pm?.manifests as Record<string, PluginManifest>) || {};
         if (!rawName) return null;
 
         this._pidByNameCache ||= new Map<string, string | null>();
@@ -268,12 +279,19 @@ export default class PluginsEnabledCss extends Plugin {
 
     /** Update <body> classes to reflect enabled/disabled state. */
     private async _updatePluginStateCss(): Promise<void> {
-        const allPlugins = Array.from(Object.values(this.app.plugins.manifests));
+        // Define a type for the plugins API to avoid 'any'
+        interface PluginsApi {
+            manifests: Record<string, PluginManifest>;
+            enabledPlugins: Set<string>;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pluginsApi: PluginsApi = ((this.app as any).plugins as PluginsApi);
+        const allPlugins = Array.from(Object.values(pluginsApi.manifests));
         const pluginIds = new Set<string>();
-        for (const plugin of allPlugins) pluginIds.add(plugin.id);
+        for (const plugin of allPlugins) pluginIds.add((plugin as PluginManifest).id);
 
         for (const id of pluginIds) {
-            const enabled = this.app.plugins.enabledPlugins.has(id);
+            const enabled = pluginsApi.enabledPlugins.has(id);
             const onClass = `the-${id}-is-enabled`;
             const offClass = `the-${id}-is-disabled`;
             document.body.classList.toggle(onClass, enabled);
@@ -294,34 +312,35 @@ export default class PluginsEnabledCss extends Plugin {
 
     /** Build/refresh the stylesheet content. */
     private _applyPluginCss(): void {
-        const pluginsApi = this.app.plugins;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pluginsApi = (this.app as any).plugins;
         if (!pluginsApi) return;
 
-        const manifests: Record<string, PluginManifest> = (pluginsApi.manifests as any) || {};
+        const manifests: Record<string, PluginManifest> = pluginsApi.manifests || {};
         const allIds = Object.keys(manifests);
 
         let css = `
-/* Base rule injected by Plugins Enabled CSS */
-a.internal-link.pec-plugin,
-.cm-hmd-internal-link > a.pec-plugin {
-  position: relative;
-}
-a.internal-link.pec-plugin::before,
-.cm-hmd-internal-link > a.pec-plugin::before {
-  content: '🔌';
-  font-size: 0.85em;
-}
-`;
+			/* Base rule injected by Plugins Enabled CSS */
+			a.internal-link.pec-plugin,
+			.cm-hmd-internal-link > a.pec-plugin {
+				position: relative;
+			}
+			a.internal-link.pec-plugin::before,
+			.cm-hmd-internal-link > a.pec-plugin::before {
+				content: '🔌';
+				font-size: 0.85em;
+			}
+		`;
 
         // Per-plugin enabled/disabled opacity
         for (const id of allIds) {
             css += `
-body.the-${id}-is-enabled .cm-hmd-internal-link.pec-plugin.pid-${id}::before,
-body.the-${id}-is-enabled a.internal-link.pec-plugin.pid-${id}::before { opacity: 0.9; }
+				body.the-${id}-is-enabled .cm-hmd-internal-link.pec-plugin.pid-${id}::before,
+				body.the-${id}-is-enabled a.internal-link.pec-plugin.pid-${id}::before { opacity: 0.9; }
 
-body.the-${id}-is-disabled .cm-hmd-internal-link.pec-plugin.pid-${id}::before,
-body.the-${id}-is-disabled a.internal-link.pec-plugin.pid-${id}::before { opacity: 0.3; }
-`;
+				body.the-${id}-is-disabled .cm-hmd-internal-link.pec-plugin.pid-${id}::before,
+				body.the-${id}-is-disabled a.internal-link.pec-plugin.pid-${id}::before { opacity: 0.3; }
+			`;
         }
 
         let style = document.getElementById(this.STYLE_ID) as HTMLStyleElement | null;
